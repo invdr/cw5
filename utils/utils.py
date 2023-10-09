@@ -2,17 +2,36 @@ import pprint
 
 import psycopg2
 import requests
+import re
 
 URL = "https://api.hh.ru"
 
 
-def get_employer_info(employer_id: int):
+def delete_html_tags(description: str) -> str:
+    res = re.sub(r"\<[^>]*\>", "", description)
+    res = res.replace("&mdash;", "-")
+    res = res.replace("\xa0", "")
+    res = res.replace("\n", "")
+    res = res.replace("\t", " ")
+    res = res.replace("\r", "")
+    res = res.replace("&nbsp;", " ")
+    return res
+
+
+def get_employer_info(employer_id: int) -> tuple:
     """Возвращает информацию о работодателе по его id"""
 
     request_url = f"{URL}/employers/{employer_id}"
 
-    response = requests.get(url=request_url)
-    return response.json()
+    employer_response = requests.get(url=request_url).json()
+    emp_id = employer_response["id"]
+    emp_name = employer_response["name"]
+    emp_area = employer_response["area"]["name"]
+    emp_url = employer_response["alternate_url"]
+    emp_description = delete_html_tags(employer_response["description"])
+    employer_info = (emp_id, emp_name, emp_area, emp_url, emp_description)
+
+    return employer_info
 
 
 def get_page(employer_id: str, page: int) -> dict:
@@ -29,80 +48,35 @@ def get_page(employer_id: str, page: int) -> dict:
     return response.json()
 
 
-def get_vacancies(employer_id):
+def get_vacancies(employer_id: int) -> list[tuple]:
+    start_page = get_page(employer_id, 0)
+    pages_number = start_page["pages"]
 
     vacancies_list = []
 
-    print('Идет процесс сбора вакансий...')
+    print("Идет процесс сбора вакансий...")
     # проходим в цикле по страницам результата запроса (100 записей на 1 страницу)
-    for page in range(0, 1):
-        vacancies = get_page(employer_id, page)
+    for page in range(0, pages_number):
+        vacancies = get_page(employer_id, page)["items"]
         # проверка на 2000 записей при 100 записях на 1 странице
-        # если кол-во страниц результата запроса равно значению "page"
-        # выходим из цикла
 
-        items = vacancies['items'][0]
-        vac_id = items['id']
-        name = items['name']
-        area = items['area']['name']
-        salary_from = items['salary']['from']
-        salary_to = items['salary']['to']
-        currency = items['salary']['currency']
-        vac_url = items['url']
-        vacancies_list.extend([items])
-
+        for vacancy in vacancies:
+            vac_id = vacancy["id"]
+            name = vacancy["name"]
+            area = vacancy["area"]["name"]
+            salary_from = (
+                vacancy["salary"]["from"] if vacancy["salary"]["from"] else "null"
+            )
+            salary_to = vacancy["salary"]["to"] if vacancy["salary"]["to"] else "null"
+            currency = vacancy["salary"]["currency"]
+            vac_url = vacancy["url"]
+            vacancies_list.append(
+                (vac_id, name, area, salary_from, salary_to, currency, vac_url)
+            )
     return vacancies_list
 
 
-def create_database(database_name: str, params: dict) -> None:
-    """Создание базы данных и таблиц для сохранения данных о работодателях и вакансиях."""
-
-    # connect to create database
-    conn = psycopg2.connect(dbname='postgres', **params)
-    conn.autocommit = True
-    cur = conn.cursor()
-
-    cur.execute(f"DROP DATABASE IF EXISTS {database_name}")
-    cur.execute(f"CREATE DATABASE {database_name}")
-
-    conn.close()
-
-    # create tables
-    conn = psycopg2.connect(dbname=database_name, **params)
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            CREATE TABLE employers (
-                id SERIAL PRIMARY KEY,
-                name VARCHAR(50) UNIQUE NOT NULL,
-                open_vacancies SMALLINT,
-                area VARCHAR(50),
-                url VARCHAR(100),
-                description TEXT
-            )
-        """
-        )
-
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            CREATE TABLE vacancies (
-                id SERIAL PRIMARY KEY,
-                name VARCHAR NOT NULL,
-                employer_id INT REFERENCES employers(id),
-                area VARCHAR(50),
-                salary_from SMALLINT,
-                salary_to SMALLINT,
-                currency VARCHAR(3),
-                url VARCHAR(100)
-            )
-        """
-        )
-
-    conn.commit()
-    conn.close()
-
-
-if __name__ == '__main__':
-    vac = get_vacancies(9498112)
+if __name__ == "__main__":
+    vac = get_employer_info(9498112)
     pprint.pp(vac)
+    print(vac)
