@@ -21,8 +21,8 @@ def create_db_and_tables(database_name: str, params: dict) -> None:
         cur.execute(
             """
             CREATE TABLE employers (
-                id SERIAL PRIMARY KEY,
-                name VARCHAR(50) UNIQUE NOT NULL,
+                id INT PRIMARY KEY,
+                name VARCHAR(50) NOT NULL,
                 area VARCHAR(50),
                 url VARCHAR(100),
                 description TEXT
@@ -38,8 +38,8 @@ def create_db_and_tables(database_name: str, params: dict) -> None:
                 name VARCHAR NOT NULL,
                 employer_id INT REFERENCES employers(id),
                 area VARCHAR(50),
-                salary_from SMALLINT,
-                salary_to SMALLINT,
+                salary_from INT,
+                salary_to INT,
                 currency VARCHAR(3),
                 url VARCHAR(100)
             )
@@ -50,16 +50,16 @@ def create_db_and_tables(database_name: str, params: dict) -> None:
     conn.close()
 
 
-def insert_data(cur, table: str, data: list) -> None:
+def insert_data(cur, table: str, data: tuple) -> None:
     """Запись данных в таблицу."""
     # получаем кол-во %s по кол-ву столбцов в таблице
-    values_count = ", ".join(["%s"] * len(data[0]))
+    values_count = ", ".join(["%s"] * len(data))
     try:
         # получаем данные data в таблицу table
-        cur.executemany(f"INSERT INTO {table} VALUES ({values_count})", data)
-        # заносим полученные данные в таблицу в pgAdmin
-        print(f"Данные успешно внесены в таблицу {table.upper()}")
+        cur.execute(f"INSERT INTO {table} VALUES ({values_count})", data)
     except Error as e:
         print(f"Произошла {e}")
+
+
 
 

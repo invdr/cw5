@@ -1,6 +1,5 @@
 import pprint
 
-import psycopg2
 import requests
 import re
 
@@ -34,7 +33,7 @@ def get_employer_info(employer_id: int) -> tuple:
     return employer_info
 
 
-def get_page(employer_id: str, page: int) -> dict:
+def get_page(employer_id: int, page: int) -> dict:
     """Функция получает данные по вакансиям с необходимой страницы для дальнейшей работы."""
     request_url = f"{URL}/vacancies"
     params = {
@@ -48,35 +47,34 @@ def get_page(employer_id: str, page: int) -> dict:
     return response.json()
 
 
-def get_vacancies(employer_id: int) -> list[tuple]:
+def get_vacancies(employer_id: int) -> list[dict]:
     start_page = get_page(employer_id, 0)
     pages_number = start_page["pages"]
 
     vacancies_list = []
 
-    print("Идет процесс сбора вакансий...")
     # проходим в цикле по страницам результата запроса (100 записей на 1 страницу)
     for page in range(0, pages_number):
-        vacancies = get_page(employer_id, page)["items"]
-        # проверка на 2000 записей при 100 записях на 1 странице
+        vacancies = get_page(employer_id, page)
 
-        for vacancy in vacancies:
-            vac_id = vacancy["id"]
-            name = vacancy["name"]
-            area = vacancy["area"]["name"]
-            salary_from = (
-                vacancy["salary"]["from"] if vacancy["salary"]["from"] else "null"
-            )
-            salary_to = vacancy["salary"]["to"] if vacancy["salary"]["to"] else "null"
-            currency = vacancy["salary"]["currency"]
-            vac_url = vacancy["url"]
-            vacancies_list.append(
-                (vac_id, name, area, salary_from, salary_to, currency, vac_url)
-            )
+        # проверка на 2000 записей при 100 записях на 1 странице
+        for vacancy in vacancies['items']:
+            vac_info = {
+                'vac_id': vacancy["id"],
+                'name': vacancy["name"],
+                'area': vacancy["area"]["name"],
+                'salary_from': (
+                    vacancy["salary"]["from"] if vacancy["salary"]["from"] else 0
+                ),
+                'salary_to': vacancy["salary"]["to"] if vacancy["salary"]["to"] else 0,
+                'currency': vacancy["salary"]["currency"],
+                'vac_url': vacancy["url"],
+            }
+            vacancies_list.append(vac_info)
+
     return vacancies_list
 
 
 if __name__ == "__main__":
-    vac = get_employer_info(9498112)
+    vac = get_vacancies(9498112)
     pprint.pp(vac)
-    print(vac)
